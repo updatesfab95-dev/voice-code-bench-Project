@@ -1,4 +1,4 @@
-from voice_code_bench.dataset import export_summary_csv, score_predictions, summarize_examples
+from voice_code_bench.dataset import export_summary_csv, score_prediction_directory, score_predictions, summarize_examples
 
 
 def test_summarize_examples_counts_basic_metrics():
@@ -87,3 +87,35 @@ def test_export_summary_csv(tmp_path):
     assert "file_name" in content
     assert "sample.wav" in content
     assert "support" in content
+
+
+def test_score_prediction_directory(tmp_path):
+    rows = [
+        {
+            "file_name": "a.wav",
+            "entities": [{"canonical": "--dry-run", "acoustic": "double dash dry dash run"}],
+        },
+        {
+            "file_name": "b.wav",
+            "entities": [{"canonical": "https://example.com", "acoustic": "https example dot com"}],
+        },
+    ]
+
+    pred_dir = tmp_path / "predictions"
+    pred_dir.mkdir()
+    (pred_dir / "model_one.json").write_text(
+        '{"a.wav": "double dash dry dash run", "b.wav": "https example dot com"}',
+        encoding="utf-8",
+    )
+    (pred_dir / "model_two.json").write_text(
+        '{"a.wav": "double dash dry run", "b.wav": "https example google com"}',
+        encoding="utf-8",
+    )
+
+    results = score_prediction_directory(rows, pred_dir)
+
+    assert len(results) == 2
+    assert results[0]["model_name"] == "model_one"
+    assert results[0]["ctem"] == 1.0
+    assert results[1]["model_name"] == "model_two"
+    assert results[1]["ctem"] < 1.0

@@ -194,6 +194,34 @@ def export_summary_csv(rows: Iterable[Mapping[str, Any]], output_path: str | Pat
     return path
 
 
+def score_prediction_directory(rows: Iterable[Mapping[str, Any]], prediction_dir: str | Path) -> list[dict[str, Any]]:
+    """Score every JSON prediction file in a directory and return leaderboard rows."""
+    rows = list(rows)
+    prediction_dir = Path(prediction_dir)
+    if not prediction_dir.exists():
+        return []
+
+    entries: list[dict[str, Any]] = []
+    for path in sorted(prediction_dir.glob("*.json")):
+        with path.open("r", encoding="utf-8") as fh:
+            predictions = json.load(fh)
+        metrics = score_predictions(rows, predictions)
+        entries.append(
+            {
+                "model_name": path.stem,
+                "file_count": len(predictions),
+                "num_examples": metrics["num_examples"],
+                "num_entities": metrics["num_entities"],
+                "correct_entities": metrics["correct_entities"],
+                "ctem": metrics["ctem"],
+                "tsr": metrics["tsr"],
+                "success_examples": metrics["success_examples"],
+            }
+        )
+
+    return sorted(entries, key=lambda item: (-item["ctem"], -item["tsr"], item["model_name"]))
+
+
 def load_voice_code_bench(split: str = "test", limit: int | None = None) -> list[dict[str, Any]]:
     """Load the VoiceCodeBench dataset from Hugging Face."""
     try:
@@ -217,6 +245,7 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="Print the summary as JSON")
     parser.add_argument("--export-csv", type=str, default=None, help="Optional CSV path to write a compact row summary")
     parser.add_argument("--prediction-file", type=str, default=None, help="Optional JSON file mapping file_name -> prediction text")
+    parser.add_argument("--prediction-dir", type=str, default=None, help="Optional directory of JSON prediction files to score as a leaderboard")
     args = parser.parse_args()
 
     rows = load_voice_code_bench(split=args.split, limit=args.limit)
@@ -227,6 +256,9 @@ def main() -> None:
             predictions = json.load(fh)
         metrics = score_predictions(rows, predictions)
         summary["scoring"] = metrics
+
+    if args.prediction_dir:
+        summary["leaderboard"] = score_prediction_directory(rows, args.prediction_dir)
 
     if args.export_csv:
         export_summary_csv(rows, args.export_csv)
@@ -259,6 +291,11 @@ def main() -> None:
         print(f"  - correct entities: {metrics['correct_entities']} / {metrics['num_entities']}")
         print(f"  - CTEM: {metrics['ctem']}")
         print(f"  - TSR: {metrics['tsr']}")
+
+    if args.prediction_dir:
+        print("Leaderboard:")
+        for item in summary["leaderboard"]:
+            print(f"  - {item['model_name']}: CTEM={item['ctem']}, TSR={item['tsr']}, correct={item['correct_entities']}/{item['num_entities']}")
 
     if args.export_csv:
         print(f"CSV export written to: {args.export_csv}")

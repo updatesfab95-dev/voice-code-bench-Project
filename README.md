@@ -42,6 +42,14 @@ python -m voice_code_bench --split test --limit 10 --prediction-file predictions
 
 The prediction file should be a JSON object mapping each `file_name` to the model’s transcript text. The package will compute CTEM and TSR-style metrics for the matching entities.
 
+## Score a directory of model outputs
+
+```bash
+python -m voice_code_bench --split test --limit 20 --prediction-dir predictions/ --json
+```
+
+This evaluates every `.json` prediction file in the directory and returns a leaderboard sorted by CTEM and TSR for easy comparison across models.
+
 ## Export a CSV summary
 
 ```bash
